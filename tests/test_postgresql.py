@@ -30,7 +30,7 @@ from mongo_connector.test_utils import (ReplicaSet,
                                         close_client)
 
 from mongo_connector.util import retry_until_ok
-from tests import unittest
+import unittest
 
 Postgresql = testing.postgresql.PostgresqlFactory(cache_initialized_db=True)
 

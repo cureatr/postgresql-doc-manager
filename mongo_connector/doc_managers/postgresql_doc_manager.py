@@ -27,8 +27,7 @@ import psycopg2.extras
 import bson
 import bson.json_util
 
-from mongo_connector import errors
-from mongo_connector.compat import u
+from mongo_connector import errors, compat
 from mongo_connector.constants import DEFAULT_MAX_BULK
 from mongo_connector.util import exception_wrapper
 from mongo_connector.doc_managers.doc_manager_base import DocManagerBase
@@ -54,7 +53,7 @@ class BSONDocumentFormatter(DefaultDocumentFormatter):
             elif math.isinf(value):
                 raise ValueError("inf")
             return value
-        elif isinstance(value, basestring) or isinstance(value, bool) or value is None:
+        elif compat.is_string(value) or isinstance(value, bool) or value is None:
             return value
         return bson.json_util.default(value)
 
@@ -153,7 +152,7 @@ class DocManager(DocManagerBase):
     def update(self, document_id, update_spec, namespace, timestamp):
         """Apply updates given in update_spec to document document_id."""
         with self._transaction() as cursor:
-            cursor.execute(u"""SELECT document FROM "{table}" WHERE "{id}" = %s;""".format(table=namespace, id=self.unique_key), (u(document_id),))
+            cursor.execute(u"""SELECT document FROM "{table}" WHERE "{id}" = %s;""".format(table=namespace, id=self.unique_key), (compat.u(document_id),))
             result = cursor.fetchone()
             document = result[0] if result else {}
         updated = self.apply_update(document, update_spec)
@@ -165,7 +164,7 @@ class DocManager(DocManagerBase):
     def upsert(self, doc, namespace, timestamp):
         """Insert a document into PostgreSQL."""
         with self._transaction() as cursor:
-            doc_id = u(doc["_id"])
+            doc_id = compat.u(doc["_id"])
             log.debug("Upsert %s into %s", doc_id, namespace)
             cursor.execute(u"""INSERT INTO "{table}" ("{id}", _ts, document) VALUES (%(id)s, %(ts)s, %(doc)s) """
                            u"""ON CONFLICT ("{id}") """
@@ -177,7 +176,7 @@ class DocManager(DocManagerBase):
         """Remove a document from PostgreSQL."""
         with self._transaction() as cursor:
             cursor.execute(u"""DELETE FROM "{table}" WHERE "{id}" = %s;""".format(table=namespace, id=self.unique_key),
-                           (u(document_id),))
+                           (compat.u(document_id),))
 
     def search(self, start_ts, end_ts):
         """Query PostgreSQL for documents in a time range.

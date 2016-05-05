@@ -1,13 +1,7 @@
 from setuptools import setup
-import sys
 
 test_suite = "tests"
 tests_require = ["mongo-orchestration>= 0.2, < 0.4", "requests>=2.5.1", "testing.postgresql>=1.3.0"]
-
-if sys.version_info[:2] == (2, 6):
-    # Need unittest2 to run unittests in Python 2.6
-    tests_require.append("unittest2")
-    test_suite = "unittest2.collector"
 
 try:
     with open("README.rst", "r") as fd:
@@ -32,7 +26,6 @@ setup(
         "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: Apache Software License",
-        "Programming Language :: Python :: 2.6",
         "Programming Language :: Python :: 2.7",
         "Programming Language :: Python :: 3.3",
         "Programming Language :: Python :: 3.4",

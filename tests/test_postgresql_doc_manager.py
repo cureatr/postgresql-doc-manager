@@ -19,7 +19,7 @@ from mongo_connector.command_helper import CommandHelper
 from mongo_connector.doc_managers.postgresql_doc_manager import DocManager
 from mongo_connector.test_utils import TESTARGS
 
-from tests import unittest
+import unittest
 from tests.test_postgresql import PostgreSQLTestCase
 
 
