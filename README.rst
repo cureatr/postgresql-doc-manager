@@ -1,3 +1,11 @@
+**********************
+postgresql-doc-manager
+**********************
+
+.. image:: https://img.shields.io/travis/cureatr/postgresql-doc-manager.svg?style=flat
+    :target: https://travis-ci.org/cureatr/postgresql-doc-manager
+    :alt: Travis CI build status
+
 Getting Started
 ---------------
 

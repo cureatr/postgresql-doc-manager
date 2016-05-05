@@ -13,15 +13,11 @@
 # limitations under the License.
 
 """Unit tests for the PostgreSQL DocManager."""
-import base64
-import sys
-import time
-
 import bson
 from mongo_connector.compat import u
 from mongo_connector.command_helper import CommandHelper
 from mongo_connector.doc_managers.postgresql_doc_manager import DocManager
-from mongo_connector.test_utils import MockGridFSFile, TESTARGS
+from mongo_connector.test_utils import TESTARGS
 
 from tests import unittest
 from tests.test_postgresql import PostgreSQLTestCase
@@ -77,13 +73,13 @@ class TestPostgrSQLDocManager(PostgreSQLTestCase):
         for i, r in enumerate(returned_ids):
             self.assertEqual(r, i)
 
-        docs = ({"_id": i, "weight": 2*i} for i in range(1000))
+        docs = ({"_id": i, "weight": 2 * i} for i in range(1000))
         self.docman.bulk_upsert(docs, *TESTARGS)
 
         returned_ids = sorted(doc["document"]["weight"] for doc in self._query())
         self.assertEqual(len(returned_ids), 1000)
         for i, r in enumerate(returned_ids):
-            self.assertEqual(r, 2*i)
+            self.assertEqual(r, 2 * i)
 
     def test_remove(self):
         """Test the remove method."""
