@@ -10,8 +10,8 @@ Getting Started
 ---------------
 
 This package is a document manager for `mongo-connector <https://github.com/mongodb-labs/mongo-connector>`__.
-It stores mongodb documents as PostgreSQL jsonb documents with a GIN index.
-This is useful for reporting on a mongodb database, reports can be run against PostgreSQL while taking advantage of JOINs aon json fields across collections/tables.
+It stores mongodb documents as PostgreSQL jsonb documents.
+This is useful for reporting on a mongodb database, reports can be run against PostgreSQL while taking advantage of JOINs on json fields across collections/tables.
 
 Each mongodb collection is replicated into PostgreSQL as a table of the same name, each row of the table has a ``document`` jsonb field and an ``_id`` primary key field.
 

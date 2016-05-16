@@ -95,7 +95,6 @@ class DocManager(DocManagerBase):
             # Quote table name since mongodb collection names are case sensitive
             cursor.execute(
                 u"""CREATE TABLE IF NOT EXISTS "{table}" ("{id}" text PRIMARY KEY) INHERITS ({parent});"""
-                u"""CREATE INDEX IF NOT EXISTS "{table}_document_idx" ON "{table}" USING gin (document);"""
                 u"""CREATE INDEX IF NOT EXISTS "{table}_ts_idx" ON "{table}" (_ts DESC);"""
                 .format(parent=PARENT_TABLE, table=namespace, id=self.unique_key)
             )
