@@ -11,7 +11,7 @@ except IOError:
 
 setup(
     name='postgresql-doc-manager',
-    version='0.1.0',
+    version='0.2.0',
     maintainer='Cureatr',
     description='PostgreSQL plugin for mongo-connector',
     long_description=long_description,
