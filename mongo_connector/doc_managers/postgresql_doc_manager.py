@@ -18,11 +18,13 @@ Receives documents from an OplogThread and takes the appropriate actions on
 PostgreSQL, storing documents as JSONB.
 """
 import logging
+import time
 import numbers
 import math
 from contextlib import contextmanager
 
 import psycopg2
+import psycopg2.errorcodes
 import psycopg2.extras
 import bson
 import bson.json_util
@@ -33,11 +35,24 @@ from mongo_connector.util import exception_wrapper
 from mongo_connector.doc_managers.doc_manager_base import DocManagerBase
 from mongo_connector.doc_managers.formatters import DefaultDocumentFormatter
 
-wrap_exceptions = exception_wrapper({psycopg2.Error: errors.OperationFailed})
-
 log = logging.getLogger(__name__)
 
 PARENT_TABLE = "mongodb_collections"
+
+
+def exception_retry(f):
+    def wrapped(self, *args, **kwargs):
+        while True:
+            try:
+                return f(self, *args, **kwargs)
+            except psycopg2.Error:
+                if self.postgres.closed:
+                    log.exception("Connection closed, reconnecting")
+                    self._reconnect()
+                    continue
+                # Reraise as fatal error
+                raise
+    return wrapped
 
 
 class BSONDocumentFormatter(DefaultDocumentFormatter):
@@ -79,6 +94,15 @@ class DocManager(DocManagerBase):
                 .format(parent=PARENT_TABLE, id=self.unique_key)
             )
 
+    def _reconnect(self):
+        while True:
+            try:
+                self.postgres = psycopg2.connect(self.postgres.dsn)
+                return
+            except psycopg2.Error as e:
+                log.error("PostgreSQL reconnection error, retrying... (%s)", e)
+                time.sleep(5)
+
     @exception_wrapper({psycopg2.Error: errors.ConnectionFailed})
     def _connect(self, dsn):
         psycopg2.extensions.register_type(psycopg2.extensions.UNICODE)
@@ -102,7 +126,7 @@ class DocManager(DocManagerBase):
     def stop(self):
         pass
 
-    @wrap_exceptions
+    @exception_retry
     def handle_command(self, doc, namespace, timestamp):
         db = namespace.split('.', 1)[0]
 
@@ -139,7 +163,7 @@ class DocManager(DocManagerBase):
                     log.debug("Dropping table %s", table)
                     cursor.execute(u"""DROP TABLE "{table}";""".format(table=table))
 
-    @wrap_exceptions
+    @exception_wrapper({psycopg2.Error: errors.OperationFailed})
     def bulk_upsert(self, docs, namespace, timestamp):
         """Insert multiple documents into PostgreSQL."""
         # Bulk upsert doesn't create tables first
@@ -147,7 +171,7 @@ class DocManager(DocManagerBase):
         for doc in docs:
             self.upsert(doc, namespace, timestamp)
 
-    @wrap_exceptions
+    @exception_retry
     def update(self, document_id, update_spec, namespace, timestamp):
         """Apply updates given in update_spec to document document_id."""
         with self._transaction() as cursor:
@@ -159,7 +183,7 @@ class DocManager(DocManagerBase):
         self.upsert(updated, namespace, timestamp)
         return updated
 
-    @wrap_exceptions
+    @exception_retry
     def upsert(self, doc, namespace, timestamp):
         """Insert a document into PostgreSQL."""
         with self._transaction() as cursor:
@@ -170,7 +194,7 @@ class DocManager(DocManagerBase):
                            u"""DO UPDATE SET (_ts, document) = (%(ts)s, %(doc)s);""".format(table=namespace, id=self.unique_key),
                            {"id": doc_id, "ts": timestamp, "doc": psycopg2.extras.Json(self._formatter.format_document(doc))})
 
-    @wrap_exceptions
+    @exception_retry
     def remove(self, document_id, namespace, timestamp):
         """Remove a document from PostgreSQL."""
         with self._transaction() as cursor:
@@ -194,7 +218,7 @@ class DocManager(DocManagerBase):
     def commit(self):
         pass
 
-    @wrap_exceptions
+    @exception_retry
     def get_last_doc(self):
         """Get the most recently modified document from PostgreSQL.
 

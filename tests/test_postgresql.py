@@ -25,6 +25,7 @@ import psycopg2.extras
 
 from mongo_connector.connector import Connector
 from mongo_connector.doc_managers.postgresql_doc_manager import DocManager
+from mongo_connector.doc_managers import postgresql_doc_manager
 from mongo_connector.test_utils import (ReplicaSet,
                                         assert_soon,
                                         close_client)
@@ -121,6 +122,25 @@ class TestPostgreSQL(PostgreSQLTestCase):
 
         self.assertEqual([doc1], [item['document'] for item in self._query("""SELECT document FROM "test.test1";""")])
         self.assertEqual([doc2], [item['document'] for item in self._query("""SELECT document FROM "test.test2";""")])
+
+    def test_insert_retry(self):
+        """Test insert retry on PostgreSQL failure."""
+        class TimeMock(object):
+            def sleep(sec):
+                time.sleep(1)
+
+        try:
+            # Monkey patch sleep
+            postgresql_doc_manager.time = TimeMock()
+            # Kill the docmanagers connection
+            self._query("SELECT pg_terminate_backend(%s)", (self.connector.doc_managers[0].postgres.get_backend_pid(),))
+            _id = self.conn.test.test1.insert_one({'name': 'retry'}).inserted_id
+            assert_soon(lambda: self._count() == 1)
+        finally:
+            postgresql_doc_manager.time = time
+
+        doc = self.conn.test.test1.find_one({"_id": _id})
+        self.assertEqual([doc], [item['document'] for item in self._query("""SELECT document FROM "test.test1";""")])
 
     def test_remove(self):
         """Tests remove operations."""
