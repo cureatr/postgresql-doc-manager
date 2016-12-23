@@ -35,6 +35,8 @@ from mongo_connector.util import exception_wrapper
 from mongo_connector.doc_managers.doc_manager_base import DocManagerBase
 from mongo_connector.doc_managers.formatters import DefaultDocumentFormatter
 
+__version__ = "0.3.0"
+
 log = logging.getLogger(__name__)
 
 PARENT_TABLE = "mongodb_collections"

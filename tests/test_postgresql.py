@@ -239,5 +239,6 @@ class TestPostgreSQL(PostgreSQLTestCase):
             self.assertNotIn('nan', doc)
             self.assertTrue(doc['still_exists'])
 
+
 if __name__ == '__main__':
     unittest.main()

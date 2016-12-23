@@ -1,7 +1,8 @@
+import re
 from setuptools import setup
 
 test_suite = "tests"
-tests_require = ["mongo-orchestration>= 0.2, < 0.4", "requests>=2.5.1", "testing.postgresql>=1.3.0"]
+tests_require = ["mongo-orchestration>= 0.6.7, < 1.0", "requests>=2.5.1", "testing.postgresql>=1.3.0"]
 
 try:
     with open("README.rst", "r") as fd:
@@ -9,9 +10,16 @@ try:
 except IOError:
     long_description = None  # Install without README.rst
 
+with open("mongo_connector/doc_managers/postgresql_doc_manager.py", "r") as fd:
+    data = fd.read()
+version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]", data, re.M)
+if not version_match:
+    raise RuntimeError("Unable to find version string.")
+version = version_match.group(1)
+
 setup(
     name='postgresql-doc-manager',
-    version='0.2.1',
+    version=version,
     maintainer='Cureatr',
     description='PostgreSQL plugin for mongo-connector',
     long_description=long_description,
@@ -19,7 +27,7 @@ setup(
     author='Andrew Wason',
     author_email='developers@cureatr.com',
     url='https://github.com/cureatr/postgresql-doc-manager',
-    install_requires=['mongo-connector >= 2.3.0', "psycopg2>=2.6.0,<3.0.0"],
+    install_requires=['mongo-connector >= 2.5.0', "psycopg2>=2.6.0,<3.0.0"],
     packages=["mongo_connector", "mongo_connector.doc_managers"],
     license="Apache License, Version 2.0",
     classifiers=[
