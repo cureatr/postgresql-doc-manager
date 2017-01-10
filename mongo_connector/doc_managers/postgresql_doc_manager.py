@@ -35,7 +35,7 @@ from mongo_connector.util import exception_wrapper
 from mongo_connector.doc_managers.doc_manager_base import DocManagerBase
 from mongo_connector.doc_managers.formatters import DefaultDocumentFormatter
 
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 
 log = logging.getLogger(__name__)
 
@@ -170,8 +170,9 @@ class DocManager(DocManagerBase):
         """Insert multiple documents into PostgreSQL."""
         # Bulk upsert doesn't create tables first
         self._create_table(namespace)
-        for doc in docs:
-            self.upsert(doc, namespace, timestamp)
+        with self._transaction() as cursor:
+            for doc in docs:
+                self._upsert(cursor, doc, namespace, timestamp)
 
     @exception_retry
     def update(self, document_id, update_spec, namespace, timestamp):
@@ -180,21 +181,24 @@ class DocManager(DocManagerBase):
             cursor.execute(u"""SELECT document FROM "{table}" WHERE "{id}" = %s;""".format(table=namespace, id=self.unique_key), (compat.u(document_id),))
             result = cursor.fetchone()
             document = result[0] if result else {}
-        updated = self.apply_update(document, update_spec)
-        updated["_id"] = document_id
-        self.upsert(updated, namespace, timestamp)
-        return updated
+            updated = self.apply_update(document, update_spec)
+            updated["_id"] = document_id
+            self._upsert(cursor, updated, namespace, timestamp)
+            return updated
 
     @exception_retry
     def upsert(self, doc, namespace, timestamp):
         """Insert a document into PostgreSQL."""
         with self._transaction() as cursor:
-            doc_id = compat.u(doc["_id"])
-            log.debug("Upsert %s into %s", doc_id, namespace)
-            cursor.execute(u"""INSERT INTO "{table}" ("{id}", _ts, document) VALUES (%(id)s, %(ts)s, %(doc)s) """
-                           u"""ON CONFLICT ("{id}") """
-                           u"""DO UPDATE SET (_ts, document) = (%(ts)s, %(doc)s);""".format(table=namespace, id=self.unique_key),
-                           {"id": doc_id, "ts": timestamp, "doc": psycopg2.extras.Json(self._formatter.format_document(doc))})
+            self._upsert(cursor, doc, namespace, timestamp)
+
+    def _upsert(self, cursor, doc, namespace, timestamp):
+        doc_id = compat.u(doc["_id"])
+        log.debug("Upsert %s into %s", doc_id, namespace)
+        cursor.execute(u"""INSERT INTO "{table}" ("{id}", _ts, document) VALUES (%(id)s, %(ts)s, %(doc)s) """
+                       u"""ON CONFLICT ("{id}") """
+                       u"""DO UPDATE SET (_ts, document) = (%(ts)s, %(doc)s);""".format(table=namespace, id=self.unique_key),
+                       {"id": doc_id, "ts": timestamp, "doc": psycopg2.extras.Json(self._formatter.format_document(doc))})
 
     @exception_retry
     def remove(self, document_id, namespace, timestamp):
