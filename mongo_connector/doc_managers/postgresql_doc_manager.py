@@ -30,7 +30,6 @@ import bson
 import bson.json_util
 
 from mongo_connector import errors, compat
-from mongo_connector.constants import DEFAULT_MAX_BULK
 from mongo_connector.util import exception_wrapper
 from mongo_connector.doc_managers.doc_manager_base import DocManagerBase
 from mongo_connector.doc_managers.formatters import DefaultDocumentFormatter
@@ -82,10 +81,9 @@ class DocManager(DocManagerBase):
     PostgreSQL, storing documents as JSONB
     """
 
-    def __init__(self, url, unique_key='_id', chunk_size=DEFAULT_MAX_BULK, **kwargs):
+    def __init__(self, url, unique_key='_id', **kwargs):
         self.postgres = self._connect(url)
         self.unique_key = unique_key
-        self.chunk_size = chunk_size
         self._formatter = BSONDocumentFormatter()
 
         # Create parent table that all collections inherit from
