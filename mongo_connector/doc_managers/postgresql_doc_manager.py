@@ -29,12 +29,12 @@ import psycopg2.extras
 import bson
 import bson.json_util
 
-from mongo_connector import errors, compat
+from mongo_connector import errors, compat, constants
 from mongo_connector.util import exception_wrapper
 from mongo_connector.doc_managers.doc_manager_base import DocManagerBase
 from mongo_connector.doc_managers.formatters import DefaultDocumentFormatter
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 
 log = logging.getLogger(__name__)
 
@@ -81,10 +81,11 @@ class DocManager(DocManagerBase):
     PostgreSQL, storing documents as JSONB
     """
 
-    def __init__(self, url, unique_key='_id', **kwargs):
+    def __init__(self, url, unique_key='_id', chunk_size=constants.DEFAULT_MAX_BULK, **kwargs):
         self.postgres = self._connect(url)
         self.unique_key = unique_key
         self._formatter = BSONDocumentFormatter()
+        self.chunk_size = chunk_size
 
         # Create parent table that all collections inherit from
         # http://www.postgresql.org/docs/9.5/static/ddl-inherit.html
@@ -114,14 +115,13 @@ class DocManager(DocManagerBase):
         with self.postgres, self.postgres.cursor() as cursor:
             yield cursor
 
-    def _create_table(self, namespace):
-        with self._transaction() as cursor:
-            # Quote table name since mongodb collection names are case sensitive
-            cursor.execute(
-                u"""CREATE TABLE IF NOT EXISTS "{table}" ("{id}" text PRIMARY KEY) INHERITS ({parent});"""
-                u"""CREATE INDEX IF NOT EXISTS "{table}_ts_idx" ON "{table}" (_ts DESC);"""
-                .format(parent=PARENT_TABLE, table=namespace, id=self.unique_key)
-            )
+    def _create_table(self, cursor, namespace):
+        # Quote table name since mongodb collection names are case sensitive
+        cursor.execute(
+            u"""CREATE TABLE IF NOT EXISTS "{table}" ("{id}" text PRIMARY KEY) INHERITS ({parent});"""
+            u"""CREATE INDEX IF NOT EXISTS "{table}_ts_idx" ON "{table}" (_ts DESC);"""
+            .format(parent=PARENT_TABLE, table=namespace, id=self.unique_key)
+        )
 
     def stop(self):
         pass
@@ -153,7 +153,8 @@ class DocManager(DocManagerBase):
             if db and coll:
                 table = u"{}.{}".format(db, coll)
                 log.debug("Creating table %s", table)
-                self._create_table(table)
+                with self._transaction() as cursor:
+                    self._create_table(cursor, table)
 
         if doc.get('drop'):
             db, coll = self.command_helper.map_collection(db, doc['drop'])
@@ -166,11 +167,21 @@ class DocManager(DocManagerBase):
     @exception_wrapper({psycopg2.Error: errors.OperationFailed})
     def bulk_upsert(self, docs, namespace, timestamp):
         """Insert multiple documents into PostgreSQL."""
-        # Bulk upsert doesn't create tables first
-        self._create_table(namespace)
         with self._transaction() as cursor:
-            for doc in docs:
-                self._upsert(cursor, doc, namespace, timestamp)
+            cursor.execute("SELECT EXISTS(SELECT * FROM information_schema.tables WHERE table_name=%s)", (namespace,))
+            # If the table exists, upsert each row
+            if cursor.fetchone()[0]:
+                for doc in docs:
+                    self._upsert(cursor, doc, namespace, timestamp)
+            # If it doesn't exist, we can bulk insert
+            else:
+                self._create_table(cursor, namespace)
+                log.debug("Bulk inserting documents into %s", namespace)
+                psycopg2.extras.execute_values(
+                    cursor,
+                    u"""INSERT INTO "{table}" ("{id}", _ts, document) VALUES %s;""".format(table=namespace, id=self.unique_key),
+                    ((compat.u(doc["_id"]), timestamp, psycopg2.extras.Json(self._formatter.format_document(doc))) for doc in docs),
+                    page_size=self.chunk_size)
 
     @exception_retry
     def update(self, document_id, update_spec, namespace, timestamp):

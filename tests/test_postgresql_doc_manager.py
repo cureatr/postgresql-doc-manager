@@ -17,6 +17,7 @@ import bson
 from mongo_connector.compat import u
 from mongo_connector.command_helper import CommandHelper
 from mongo_connector.doc_managers.postgresql_doc_manager import DocManager
+from mongo_connector import constants
 from mongo_connector.test_utils import TESTARGS
 
 import unittest
@@ -29,10 +30,14 @@ class TestPostgrSQLDocManager(PostgreSQLTestCase):
     def setUp(self):
         super(TestPostgrSQLDocManager, self).setUp()
         self.docman = DocManager(self.postgresql.url())
-        self.docman._create_table(TESTARGS[0])
+
+    def _create_table(self):
+        with self.docman._transaction() as cursor:
+            self.docman._create_table(cursor, TESTARGS[0])
 
     def test_update(self):
         """Test the update method."""
+        self._create_table()
         doc_id = bson.ObjectId()
         doc = {"_id": doc_id, "a": 1, "b": 2}
         self.docman.upsert(doc, *TESTARGS)
@@ -51,6 +56,7 @@ class TestPostgrSQLDocManager(PostgreSQLTestCase):
 
     def test_upsert(self):
         """Test the upsert method."""
+        self._create_table()
         doc_id = bson.ObjectId()
         docc = {'_id': doc_id, 'name': 'John'}
         self.docman.upsert(docc, *TESTARGS)
@@ -62,6 +68,7 @@ class TestPostgrSQLDocManager(PostgreSQLTestCase):
 
     def test_bulk_upsert(self):
         """Test the bulk_upsert method."""
+        # This will create the table so the following will upsert
         self.docman.bulk_upsert([], *TESTARGS)
 
         docs = ({"_id": i} for i in range(1000))
@@ -81,8 +88,21 @@ class TestPostgrSQLDocManager(PostgreSQLTestCase):
         for i, r in enumerate(returned_ids):
             self.assertEqual(r, 2 * i)
 
+    def test_bulk_upsert_insert(self):
+        """Test the bulk_upsert method on empty table."""
+        count = int(constants.DEFAULT_MAX_BULK * 3.5)
+        docs = ({"_id": i} for i in range(count))
+        self.docman.bulk_upsert(docs, *TESTARGS)
+        self.docman.commit()
+        returned_ids = sorted(int(doc["document"]["_id"]) for doc in self._query())
+        self.assertEqual(self._count(), count)
+        self.assertEqual(len(returned_ids), count)
+        for i, r in enumerate(returned_ids):
+            self.assertEqual(r, i)
+
     def test_remove(self):
         """Test the remove method."""
+        self._create_table()
         docc = {'_id': '1', 'name': 'John'}
         self.docman.upsert(docc, *TESTARGS)
         res = self._query()
@@ -98,6 +118,7 @@ class TestPostgrSQLDocManager(PostgreSQLTestCase):
 
         Make sure we can retrieve documents last modified within a time range.
         """
+        self._create_table()
         doc_id1 = bson.ObjectId()
         docc = {'_id': doc_id1, 'name': 'John'}
         self.docman.upsert(docc, 'test.test', 5767301236327972865)
@@ -116,6 +137,7 @@ class TestPostgrSQLDocManager(PostgreSQLTestCase):
 
         Make sure we can retrieve the document most recently modified from PostgreSQL.
         """
+        self._create_table()
         base = self.docman.get_last_doc()
         ts = base.get("_ts", 0) if base else 0
         docc = {'_id': '4', 'name': 'Hare'}
@@ -136,6 +158,7 @@ class TestPostgrSQLDocManager(PostgreSQLTestCase):
         self.assertEqual(self._count(), 3)
 
     def test_commands(self):
+        self._create_table()
         cmd_args = ('test.$cmd', 1)
         self.docman.command_helper = CommandHelper()
 
