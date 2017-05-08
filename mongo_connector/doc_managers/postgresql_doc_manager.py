@@ -34,7 +34,7 @@ from mongo_connector.util import exception_wrapper
 from mongo_connector.doc_managers.doc_manager_base import DocManagerBase
 from mongo_connector.doc_managers.formatters import DefaultDocumentFormatter
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +69,8 @@ class BSONDocumentFormatter(DefaultDocumentFormatter):
             elif math.isinf(value):
                 raise ValueError("inf")
             return value
+        elif isinstance(value, bson.binary.Binary):
+            return bson.json_util.default(value)
         elif compat.is_string(value) or isinstance(value, bool) or value is None:
             return value
         return bson.json_util.default(value)

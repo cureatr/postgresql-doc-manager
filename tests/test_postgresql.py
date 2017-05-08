@@ -17,6 +17,7 @@
 import os
 import time
 import datetime
+import bz2
 
 import bson
 import testing.postgresql
@@ -238,6 +239,16 @@ class TestPostgreSQL(PostgreSQLTestCase):
             self.assertNotIn('inf', doc)
             self.assertNotIn('nan', doc)
             self.assertTrue(doc['still_exists'])
+
+    def test_bindata(self):
+        s = b'some binary data'
+        b = bson.binary.Binary(bz2.compress(s))
+        self.conn.test.test.insert_one({'bindata': b})
+        assert_soon(lambda: self._count() > 0)
+        for doc in self._query():
+            doc = doc['document']
+            self.assertEqual(b, doc['bindata'])
+            self.assertEqual(s, bz2.decompress(doc['bindata']))
 
 
 if __name__ == '__main__':
