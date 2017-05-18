@@ -38,8 +38,6 @@ __version__ = "0.3.3"
 
 log = logging.getLogger(__name__)
 
-PARENT_TABLE = "mongodb_collections"
-
 
 def exception_retry(f):
     def wrapped(self, *args, **kwargs):
@@ -83,18 +81,19 @@ class DocManager(DocManagerBase):
     PostgreSQL, storing documents as JSONB
     """
 
-    def __init__(self, url, unique_key='_id', chunk_size=constants.DEFAULT_MAX_BULK, **kwargs):
+    def __init__(self, url, unique_key='_id', chunk_size=constants.DEFAULT_MAX_BULK, parent_table="mongodb_collections", **kwargs):
         self.postgres = self._connect(url)
         self.unique_key = unique_key
         self._formatter = BSONDocumentFormatter()
         self.chunk_size = chunk_size
+        self.parent_table = parent_table
 
         # Create parent table that all collections inherit from
         # http://www.postgresql.org/docs/9.5/static/ddl-inherit.html
         with self._transaction() as cursor:
             cursor.execute(
                 u"""CREATE TABLE IF NOT EXISTS {parent} ("{id}" text, _ts bigint, document jsonb);"""
-                .format(parent=PARENT_TABLE, id=self.unique_key)
+                .format(parent=self.parent_table, id=self.unique_key)
             )
 
     def _reconnect(self):
@@ -122,7 +121,7 @@ class DocManager(DocManagerBase):
         cursor.execute(
             u"""CREATE TABLE IF NOT EXISTS "{table}" ("{id}" text PRIMARY KEY) INHERITS ({parent});"""
             u"""CREATE INDEX IF NOT EXISTS "{table}_ts_idx" ON "{table}" (_ts DESC);"""
-            .format(parent=PARENT_TABLE, table=namespace, id=self.unique_key)
+            .format(parent=self.parent_table, table=namespace, id=self.unique_key)
         )
 
     def stop(self):
@@ -227,7 +226,7 @@ class DocManager(DocManagerBase):
         with self._transaction() as cursor:
             # Search all descendant tables using time range
             cursor.execute(u"""SELECT {parent}.tableoid::regclass, "{id}", _ts FROM {parent}* """
-                           u"""WHERE _ts >= %s AND _ts <= %s;""".format(parent=PARENT_TABLE, id=self.unique_key),
+                           u"""WHERE _ts >= %s AND _ts <= %s;""".format(parent=self.parent_table, id=self.unique_key),
                            (start_ts, end_ts))
             for ns, _id, _ts in cursor:
                 yield {"_id": _id, "ns": ns.strip('"'), "_ts": _ts}
@@ -245,7 +244,7 @@ class DocManager(DocManagerBase):
         with self._transaction() as cursor:
             # Search all descendant tables using time range
             cursor.execute(u"""SELECT {parent}.tableoid::regclass, "{id}", _ts """
-                           u"""FROM {parent}* ORDER BY _ts DESC LIMIT 1;""".format(parent=PARENT_TABLE, id=self.unique_key))
+                           u"""FROM {parent}* ORDER BY _ts DESC LIMIT 1;""".format(parent=self.parent_table, id=self.unique_key))
             result = cursor.fetchone()
             if result:
                 ns, _id, _ts = result
