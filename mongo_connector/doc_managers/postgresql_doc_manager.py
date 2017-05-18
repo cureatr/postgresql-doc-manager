@@ -34,7 +34,7 @@ from mongo_connector.util import exception_wrapper
 from mongo_connector.doc_managers.doc_manager_base import DocManagerBase
 from mongo_connector.doc_managers.formatters import DefaultDocumentFormatter
 
-__version__ = "0.3.3"
+__version__ = "0.3.4"
 
 log = logging.getLogger(__name__)
 
